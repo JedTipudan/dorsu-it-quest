@@ -27,3 +27,6 @@ npm-debug.log*
 
 # research paper (private, not needed to run the app)
 *.docx
+
+# personal setup notes (local only)
+SETUP-GUIDE.html

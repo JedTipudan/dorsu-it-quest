@@ -58,7 +58,20 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-**Full step-by-step guide** covering the database, Google sign-in, the first admin and Vercel deployment: open [`SETUP-GUIDE.html`](SETUP-GUIDE.html) in your browser.
+In Supabase **Authentication**, keep Email enabled (turn off "Confirm email" for classroom pilots) and add `http://localhost:3000/auth/callback` under **URL Configuration → Redirect URLs**.
+
+### Google sign-in (optional)
+
+Enable the **Google** provider in Supabase (**Authentication → Sign In / Providers**) with an OAuth client from [Google Cloud Console](https://console.cloud.google.com). Use the Supabase callback URL (`https://<project-ref>.supabase.co/auth/v1/callback`) as the authorized redirect URI. Set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` to the same client ID to use Google's own sign-in button, which shows your site's domain on the account chooser instead of the Supabase address.
+
+### First admin
+
+Run `supabase/create-admin.sql` (edit the email, password and name first), or promote an existing account:
+
+```sql
+update public.profiles set role = 'admin'
+where id = (select id from auth.users where email = 'you@example.com');
+```
 
 ### SQL files
 
@@ -71,7 +84,12 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 ## Deployment
 
-Import the repository on [Vercel](https://vercel.com), add the three environment variables (set `NEXT_PUBLIC_SITE_URL` to your Vercel URL) and deploy. Then add `https://<your-app>.vercel.app/auth/callback` to Supabase **Authentication → URL Configuration → Redirect URLs**. The app runs in Vercel's Singapore region (`vercel.json`), close to the database.
+Import the repository on [Vercel](https://vercel.com), add the three environment variables (set `NEXT_PUBLIC_SITE_URL` to your Vercel URL) and deploy. Optional: `NEXT_PUBLIC_CONTACT_EMAIL` (shown on the `/privacy` page) and `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` (Google Search Console). Then:
+
+- In Supabase **Authentication → URL Configuration**, set **Site URL** to your Vercel URL and add `https://<your-app>.vercel.app/auth/callback` to **Redirect URLs**.
+- If you use Google sign-in, add the Vercel URL to the OAuth client's **Authorized JavaScript origins**.
+
+The app runs in Vercel's Singapore region (`vercel.json`), close to the database.
 
 ## Scripts
 
@@ -82,7 +100,3 @@ Import the repository on [Vercel](https://vercel.com), add the three environment
 | `npm run lint` · `npm run typecheck` | ESLint · TypeScript checks |
 | `npm run db:test` | Run the database test suite (33 checks: grading, anti-cheat, privacy, check-ins) |
 | `npm run db:seed` | Regenerate the seed SQL from `supabase/content/curriculum.mjs` |
-
-## Authors
-
-Developed by BSIT students of Davao Oriental State University as a capstone project.

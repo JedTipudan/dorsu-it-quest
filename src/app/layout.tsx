@@ -12,6 +12,8 @@ const chakra = Chakra_Petch({ subsets: ['latin'], variable: '--font-chakra', wei
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL || 'http://localhost:3000'),
+  // Google Search Console ownership proof (needed for Google OAuth brand verification).
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } : undefined,
   title: { default: 'DOrSU IT Quest — Gamified Learning for BSIT', template: '%s · DOrSU IT Quest' },
   description:
     'Level up in Networking, Programming, Database Management and Web Development with quests, simulations, badges and leaderboards. Built for BSIT students of Davao Oriental State University.',

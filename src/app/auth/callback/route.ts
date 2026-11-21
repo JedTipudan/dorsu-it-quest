@@ -1,6 +1,6 @@
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { homeFor } from '@/lib/auth'
+import { landingPath } from '@/lib/landing'
 import { createClient } from '@/lib/supabase/server'
 
 /** Handles Google sign-in, e-mail confirmation and password recovery (PKCE code or token hash). */
@@ -29,12 +29,6 @@ export async function GET(request: NextRequest) {
   if (type === 'recovery') return NextResponse.redirect(`${origin}/reset-password`)
   if (next) return NextResponse.redirect(`${origin}${next}`)
 
-  // No specific page requested: send each role home. New Google players have no year level /
-  // section yet (Google doesn't provide them), so ask them to finish their profile first.
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = user
-    ? await supabase.from('profiles').select('role, year_level').eq('id', user.id).maybeSingle()
-    : { data: null }
-  if (profile?.role === 'student' && profile.year_level === null) return NextResponse.redirect(`${origin}/profile?complete=1`)
-  return NextResponse.redirect(`${origin}${homeFor(profile?.role)}`)
+  // No specific page requested: role home, or the profile page for new Google players.
+  return NextResponse.redirect(`${origin}${await landingPath(supabase)}`)
 }

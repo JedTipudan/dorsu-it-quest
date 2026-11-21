@@ -310,7 +310,7 @@ export default async function LandingPage() {
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-6 text-sm text-slate-500 sm:flex-row sm:px-6">
           <p>© {new Date().getFullYear()} DOrSU IT Quest · Davao Oriental State University, City of Mati</p>
-          <p>Personal data is processed in accordance with RA 10173 (Data Privacy Act of 2012).</p>
+          <p>Personal data is processed in accordance with RA 10173 (Data Privacy Act of 2012). · <a href="/privacy" className="font-semibold text-slate-700 underline hover:text-lime">Privacy Policy</a></p>
         </div>
       </footer>
     </div>

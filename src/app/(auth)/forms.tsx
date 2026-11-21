@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Field, Input, Select } from '@/components/ui/input'
 import { Alert } from '@/components/ui/misc'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { useServerForm } from '@/components/ui/use-server-form'
+import { GOOGLE_CLIENT_ID } from '@/lib/env'
 import { forgotPassword, login, register, signInWithGoogle, updatePassword } from './actions'
+import { GoogleIdentityButton } from './google-identity'
 
 function PasswordInput({ id, name, autoComplete, minLength }: { id: string; name: string; autoComplete: string; minLength?: number }) {
   const [show, setShow] = useState(false)
@@ -135,11 +137,18 @@ function GoogleLogo() {
 /**
  * "Continue with Google". On the register page it is locked until the informed-consent box
  * is ticked (RA 10173), mirroring the email sign-up form.
+ *
+ * With NEXT_PUBLIC_GOOGLE_CLIENT_ID set, Google's own button is used (popup on this site, so the
+ * account chooser names this site). Otherwise, or if Google's script can't load, it falls back to the
+ * Supabase redirect flow (whose chooser names the <project>.supabase.co address).
  */
 export function GoogleButton({ intent, next }: { intent: 'login' | 'register'; next?: string }) {
   const { state, onSubmit, pending } = useServerForm(signInWithGoogle)
   const [consent, setConsent] = useState(false)
+  const [gisFailed, setGisFailed] = useState(false)
+  const onUnavailable = useCallback(() => setGisFailed(true), [])
   const locked = intent === 'register' && !consent
+  const useGis = Boolean(GOOGLE_CLIENT_ID) && !gisFailed
   return (
     <form onSubmit={onSubmit} className="space-y-3">
       {state?.error && <Alert tone="error">{state.error}</Alert>}
@@ -151,9 +160,19 @@ export function GoogleButton({ intent, next }: { intent: 'login' | 'register'; n
           <span>
             I agree that my quiz results and survey answers may be used for the DOrSU IT Quest study, under the Data Privacy Act of 2012
             (RA 10173). Results are reported only in aggregate or by anonymous student code, and I may withdraw at any time without affecting my grades.
+            {' '}<a href="/privacy" target="_blank" className="underline hover:text-lime">Privacy Policy</a>
           </span>
         </label>
       )}
+      {useGis ? (
+        locked ? (
+          <div aria-disabled="true" className="chamfer flex h-12 w-full cursor-not-allowed items-center justify-center gap-3 bg-white font-display font-semibold text-[#1f1f1f] opacity-40">
+            <GoogleLogo /> Sign up with Google
+          </div>
+        ) : (
+          <GoogleIdentityButton intent={intent} next={next} onUnavailable={onUnavailable} />
+        )
+      ) : (
       <button
         type="submit"
         disabled={pending || locked}
@@ -162,6 +181,7 @@ export function GoogleButton({ intent, next }: { intent: 'login' | 'register'; n
         {pending ? <span className="size-5 animate-spin rounded-full border-2 border-[#1f1f1f]/30 border-t-[#1f1f1f]" aria-hidden="true" /> : <GoogleLogo />}
         {pending ? 'Opening Google…' : intent === 'register' ? 'Sign up with Google' : 'Continue with Google'}
       </button>
+      )}
       {locked && <p className="text-center text-xs text-slate-500">Tick the consent box to sign up with Google.</p>}
     </form>
   )
