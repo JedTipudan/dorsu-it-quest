@@ -1,0 +1,29 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# env files (never commit secrets)
+.env
+.env*.local
+
+# vercel / supabase local
+.vercel
+supabase/.temp
+supabase/.branches
+
+# misc
+.DS_Store
+Thumbs.db
+*.pem
+npm-debug.log*
+
+# research paper (private, not needed to run the app)
+*.docx
