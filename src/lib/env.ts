@@ -11,3 +11,10 @@ export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
  * says "to continue to <your site>" instead of "<project>.supabase.co".
  */
 export const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ''
+
+/**
+ * Cloudflare Turnstile site key (public). When set, login / sign-up / password-reset forms show a
+ * human check and send its token to Supabase. Turn CAPTCHA on in Supabase (Auth → Attack Protection)
+ * with the matching secret key so bots calling the API directly are rejected too.
+ */
+export const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''

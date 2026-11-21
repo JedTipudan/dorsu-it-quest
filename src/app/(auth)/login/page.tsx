@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Alert } from '@/components/ui/misc'
 import { logout } from '../actions'
 import { GoogleButton, LoginForm, OrDivider } from '../forms'
+import { CaptchaWidget } from '../captcha'
 
 export const metadata: Metadata = { title: 'Log in' }
 
@@ -27,6 +28,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       </p>
       <OrDivider />
       <LoginForm next={next} />
+      <CaptchaWidget />
       <p className="mt-6 text-center text-sm text-slate-600">
         New to IT Quest? <Link href="/register" className="font-semibold text-indigo-700 hover:underline">Create an account</Link>
       </p>

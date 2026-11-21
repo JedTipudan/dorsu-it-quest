@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession, isStaffRole } from '@/lib/auth'
+import { rateLimit } from '@/lib/rate-limit'
 import { csvCell } from '@/lib/utils'
 
 /** Research export: anonymous student codes only (RA 10173 — no names or emails). */
@@ -7,6 +8,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const { supabase, profile } = await getSession()
   if (!supabase || !profile || !isStaffRole(profile.role)) return new NextResponse('Forbidden', { status: 403 })
+  const limited = await rateLimit([{ parts: ['export', profile.id], limit: 30, windowSeconds: 600 }])
+  if (limited) return new NextResponse(limited, { status: 429 })
 
   const { data: cls } = await supabase.from('classes').select('name, group_type').eq('id', id).maybeSingle()
   if (!cls) return new NextResponse('Not found', { status: 404 })

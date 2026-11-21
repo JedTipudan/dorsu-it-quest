@@ -161,7 +161,7 @@ ok('only instructors can create classes')
 
 await as(ids.s1, `select join_class($1)`, [cls.join_code.toLowerCase()])
 await as(ids.s2, `select join_class($1)`, [cls.join_code])
-await fails(ids.s1, `select join_class('ZZZZZZ')`, null, /No class/)
+assert.match((await as(ids.s1, `select join_class('ZZZZZZ') as r`))[0].r.error, /No class/)
 assert.equal((await as(ids.s1, `select * from classes`)).length, 1)
 ok('students join with a (case-insensitive) code and can see their class')
 
@@ -333,6 +333,39 @@ const dbCodes = (await su(`select code, kind, rarity from cosmetics order by cod
 const tsCodes = Object.entries(COSMETICS).map(([code, c]) => `${code}:${c.kind}:${c.rarity}`).sort()
 assert.deepEqual(tsCodes, dbCodes)
 ok('cosmetics catalogue in the app matches the database')
+
+// ---- Security: rate limits & abuse prevention ----
+console.log('\nSecurity')
+const s5 = crypto.randomUUID()
+await su(`insert into auth.users (id, email, raw_user_meta_data) values ($1, 's5@dorsu.edu.ph', '{"full_name":"User S5"}')`, [s5])
+for (let i = 0; i < 15; i++) {
+  const [{ r }] = await as(s5, `select join_class($1) as r`, [`AAAA${String(i).padStart(2, '0')}`])
+  assert.match(r.error, /No class/)
+}
+const [{ r: blocked }] = await as(s5, `select join_class($1) as r`, [cls.join_code])
+assert.match(blocked.error, /Too many join attempts/) // even the right code is refused once locked
+assert.equal((await su(`select count(*)::int n from class_members where student_id = $1`, [s5]))[0].n, 0)
+ok('class-code guessing: wrong guesses are counted and locked after 15 per hour')
+
+await fails(s5, `select _join_class_impl($1)`, [cls.join_code], /permission denied/)
+await fails(s5, `select _submit_quest_attempt_impl(gen_random_uuid(), '{}'::jsonb, 1)`, null, /permission denied/)
+await fails(s5, `select _rate_hit('x', 1, 60)`, null, /permission denied/)
+await fails(s5, `select * from rate_limits`, null, /permission denied/)
+ok('limiter internals and the unthrottled originals are not callable by clients')
+
+await fails(s5, `select check_rate_limit('u:victim:login', 1, 60)`, null, /Invalid rate-limit key/)
+const srvKey = 'srv:' + 'a'.repeat(64)
+await db.exec(`set role anon;`)
+try {
+  const hits = []
+  for (let i = 0; i < 4; i++) hits.push((await db.query(`select check_rate_limit($1, 3, 60) as ok`, [srvKey])).rows[0].ok)
+  assert.deepEqual(hits, [true, true, true, false])
+} finally { await db.exec('reset role;') }
+ok('server login limiter: only HMAC-style keys accepted, blocks after the limit (callable before sign-in)')
+
+for (let i = 0; i < 10; i++) await as(s5, `insert into feedback (user_id, category, rating, message) values ($1, 'general', 4, 'Nice platform ' || $2)`, [s5, i])
+await fails(s5, `insert into feedback (user_id, category, rating, message) values ($1, 'general', 4, 'spam spam spam')`, [s5], /Too many requests/)
+ok('feedback spam limited to 10 per hour per user')
 
 const [{ xp }] = await su(`select xp from profiles where id = $1`, [ids.s1])
 console.log(`\nAll ${passed} checks passed. (student XP after run: ${xp})`)

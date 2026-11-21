@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Field, Input, Select } from '@/components/ui/input'
 import { Alert } from '@/components/ui/misc'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { useServerForm } from '@/components/ui/use-server-form'
 import { GOOGLE_CLIENT_ID } from '@/lib/env'
 import { forgotPassword, login, register, signInWithGoogle, updatePassword } from './actions'
+import { useCaptcha } from './captcha'
 import { GoogleIdentityButton } from './google-identity'
 
 function PasswordInput({ id, name, autoComplete, minLength }: { id: string; name: string; autoComplete: string; minLength?: number }) {
@@ -28,8 +29,17 @@ function PasswordInput({ id, name, autoComplete, minLength }: { id: string; name
   )
 }
 
+/** Sends the CAPTCHA token with the form and gets a fresh one after every response (tokens are single-use). */
+function useCaptchaField(state: unknown) {
+  const { required, token, reset } = useCaptcha()
+  useEffect(() => { if (state) reset() }, [state, reset])
+  const field = <input type="hidden" name="captchaToken" value={token ?? ''} />
+  return { field, blocked: required && !token }
+}
+
 export function LoginForm({ next }: { next?: string }) {
   const { state, onSubmit, pending } = useServerForm(login)
+  const captcha = useCaptchaField(state)
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       {state?.error && <Alert tone="error">{state.error}</Alert>}
@@ -43,13 +53,15 @@ export function LoginForm({ next }: { next?: string }) {
       <div className="flex justify-end">
         <Link href="/forgot-password" className="text-sm font-semibold text-indigo-700 hover:underline">Forgot password?</Link>
       </div>
-      <SubmitButton pending={pending} className="w-full" size="lg" pendingText="Entering arena…" variant="accent">Log in</SubmitButton>
+      {captcha.field}
+      <SubmitButton pending={pending} disabled={captcha.blocked} className="w-full" size="lg" pendingText="Entering arena…" variant="accent">{captcha.blocked ? 'Complete the security check' : 'Log in'}</SubmitButton>
     </form>
   )
 }
 
 export function RegisterForm() {
   const { state, onSubmit, pending } = useServerForm(register)
+  const captcha = useCaptchaField(state)
   if (state?.ok) return <Alert tone="success">{state.message}</Alert>
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -88,13 +100,15 @@ export function RegisterForm() {
           without affecting my grades.
         </span>
       </label>
-      <SubmitButton pending={pending} className="w-full" size="lg" pendingText="Spawning player…" variant="accent">Start playing</SubmitButton>
+      {captcha.field}
+      <SubmitButton pending={pending} disabled={captcha.blocked} className="w-full" size="lg" pendingText="Spawning player…" variant="accent">{captcha.blocked ? 'Complete the security check' : 'Start playing'}</SubmitButton>
     </form>
   )
 }
 
 export function ForgotPasswordForm() {
   const { state, onSubmit, pending } = useServerForm(forgotPassword)
+  const captcha = useCaptchaField(state)
   if (state?.ok) return <Alert tone="success">{state.message}</Alert>
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -102,7 +116,8 @@ export function ForgotPasswordForm() {
       <Field label="Email" htmlFor="email">
         <Input id="email" name="email" type="email" autoComplete="email" required placeholder="you@dorsu.edu.ph" />
       </Field>
-      <SubmitButton pending={pending} className="w-full" size="lg" pendingText="Sending…">Send reset link</SubmitButton>
+      {captcha.field}
+      <SubmitButton pending={pending} disabled={captcha.blocked} className="w-full" size="lg" pendingText="Sending…">{captcha.blocked ? 'Complete the security check' : 'Send reset link'}</SubmitButton>
     </form>
   )
 }
@@ -147,6 +162,11 @@ export function GoogleButton({ intent, next }: { intent: 'login' | 'register'; n
   const [consent, setConsent] = useState(false)
   const [gisFailed, setGisFailed] = useState(false)
   const onUnavailable = useCallback(() => setGisFailed(true), [])
+  const captcha = useCaptcha()
+  const tokenRef = useRef<string | null>(null)
+  useEffect(() => { tokenRef.current = captcha.token }, [captcha.token])
+  const getCaptchaToken = useCallback(() => tokenRef.current ?? undefined, [])
+  const captchaPending = captcha.required && !captcha.token
   const locked = intent === 'register' && !consent
   const useGis = Boolean(GOOGLE_CLIENT_ID) && !gisFailed
   return (
@@ -165,12 +185,12 @@ export function GoogleButton({ intent, next }: { intent: 'login' | 'register'; n
         </label>
       )}
       {useGis ? (
-        locked ? (
+        locked || captchaPending ? (
           <div aria-disabled="true" className="chamfer flex h-12 w-full cursor-not-allowed items-center justify-center gap-3 bg-white font-display font-semibold text-[#1f1f1f] opacity-40">
-            <GoogleLogo /> Sign up with Google
+            <GoogleLogo /> {captchaPending && !locked ? 'Complete the security check' : intent === 'register' ? 'Sign up with Google' : 'Continue with Google'}
           </div>
         ) : (
-          <GoogleIdentityButton intent={intent} next={next} onUnavailable={onUnavailable} />
+          <GoogleIdentityButton intent={intent} next={next} onUnavailable={onUnavailable} getCaptchaToken={getCaptchaToken} onAttempt={captcha.reset} />
         )
       ) : (
       <button

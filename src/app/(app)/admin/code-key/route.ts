@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { rateLimit } from '@/lib/rate-limit'
 import { csvCell } from '@/lib/utils'
 
 /**
@@ -11,6 +12,9 @@ import { csvCell } from '@/lib/utils'
 export async function GET() {
   const { supabase, profile } = await getSession()
   if (!supabase || !profile || profile.role !== 'admin') return new NextResponse('Forbidden', { status: 403 })
+  const limited = await rateLimit([{ parts: ['code-key', profile.id], limit: 10, windowSeconds: 3600 }])
+  if (limited) return new NextResponse(limited, { status: 429 })
+  console.info(`[audit] code-identity key downloaded by admin ${profile.id} at ${new Date().toISOString()}`)
 
   const { data, error } = await supabase.from('profiles')
     .select('student_code, full_name, display_name, email, year_level, section, created_at')

@@ -45,7 +45,13 @@ async function makeNonce() {
  * so it reads "to continue to <this site>", not the Supabase project address. The returned ID token
  * is exchanged for a normal Supabase session with signInWithIdToken.
  */
-export function GoogleIdentityButton({ intent, next, onUnavailable }: { intent: 'login' | 'register'; next?: string; onUnavailable: () => void }) {
+export function GoogleIdentityButton({ intent, next, onUnavailable, getCaptchaToken, onAttempt }: {
+  intent: 'login' | 'register'; next?: string; onUnavailable: () => void
+  /** latest CAPTCHA token (when Supabase CAPTCHA protection is on) */
+  getCaptchaToken?: () => string | undefined
+  /** called after each sign-in attempt (CAPTCHA tokens are single-use) */
+  onAttempt?: () => void
+}) {
   const holder = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -67,10 +73,15 @@ export function GoogleIdentityButton({ intent, next, onUnavailable }: { intent: 
           callback: async ({ credential }) => {
             setBusy(true)
             setError(null)
-            const { error: e } = await createClient().auth.signInWithIdToken({ provider: 'google', token: credential, nonce: nonce.raw })
+            const { error: e } = await createClient().auth.signInWithIdToken({
+              provider: 'google', token: credential, nonce: nonce.raw, options: { captchaToken: getCaptchaToken?.() },
+            })
+            onAttempt?.()
             if (e) {
               setBusy(false)
-              setError(/provider is not enabled|unsupported provider/i.test(e.message)
+              setError(/captcha/i.test(e.message)
+                ? 'Security check failed or expired. Please complete it again.'
+                : /provider is not enabled|unsupported provider/i.test(e.message)
                 ? 'Google sign-in is not enabled in Supabase yet (see the setup guide).'
                 : /audience|client id/i.test(e.message)
                   ? 'This Google client ID is not allowed in Supabase. Add it to the Google provider’s Client IDs.'
@@ -90,7 +101,7 @@ export function GoogleIdentityButton({ intent, next, onUnavailable }: { intent: 
       }
     })()
     return () => { cancelled = true }
-  }, [intent, next, onUnavailable])
+  }, [intent, next, onUnavailable, getCaptchaToken, onAttempt])
 
   return (
     <div className="space-y-2">

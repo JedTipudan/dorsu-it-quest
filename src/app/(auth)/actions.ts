@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { homeFor } from '@/lib/auth'
 import { SITE_URL, SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from '@/lib/env'
+import { clientIp, norm, rateLimit } from '@/lib/rate-limit'
+import { safePath } from '@/lib/safe-path'
 import { createClient } from '@/lib/supabase/server'
 import type { ActionState } from '@/lib/types'
 
@@ -21,11 +23,17 @@ async function origin() {
 }
 
 function safeNext(next: FormDataEntryValue | null) {
-  const n = typeof next === 'string' ? next : ''
-  return n.startsWith('/') && !n.startsWith('//') ? n : null
+  return safePath(next)
+}
+
+/** Cloudflare Turnstile token from the form (only used when CAPTCHA is enabled in Supabase). */
+function captcha(formData: FormData) {
+  const t = formData.get('captchaToken')
+  return typeof t === 'string' && t ? t : undefined
 }
 
 function friendlyAuthError(message: string) {
+  if (/captcha/i.test(message)) return 'Security check failed or expired. Please complete it again.'
   if (/invalid login credentials/i.test(message)) return 'Incorrect email or password.'
   if (/email not confirmed/i.test(message)) return 'Please confirm your email first — check your inbox for the verification link.'
   if (/already registered|already been registered/i.test(message)) return 'An account with this email already exists. Try logging in instead.'
@@ -41,8 +49,18 @@ export async function login(_: ActionState, formData: FormData): Promise<ActionS
   })
   if (!parsed.success) return { error: 'Enter a valid email and your password.' }
 
+  // Brute-force protection: tight per IP+account, generous per IP (a lab shares one IP), per account overall.
+  const ip = await clientIp()
+  const email = norm(parsed.data.email)
+  const limited = await rateLimit([
+    { parts: ['login', ip, email], limit: 5, windowSeconds: 900 },
+    { parts: ['login-ip', ip], limit: 100, windowSeconds: 900 },
+    { parts: ['login-acct', email], limit: 30, windowSeconds: 3600 },
+  ])
+  if (limited) return { error: limited }
+
   const supabase = await createClient()
-  const { data, error } = await supabase.auth.signInWithPassword(parsed.data)
+  const { data, error } = await supabase.auth.signInWithPassword({ ...parsed.data, options: { captchaToken: captcha(formData) } })
   if (error) return { error: friendlyAuthError(error.message) }
   const next = safeNext(formData.get('next'))
   if (next) redirect(next)
@@ -68,11 +86,17 @@ export async function register(_: ActionState, formData: FormData): Promise<Acti
 
   const { email, password, consent: _consent, ...meta } = parsed.data
   void _consent
+  const ip = await clientIp()
+  const limited = await rateLimit([
+    { parts: ['signup-ip', ip], limit: 60, windowSeconds: 3600 },
+    { parts: ['signup-acct', norm(email)], limit: 5, windowSeconds: 3600 },
+  ])
+  if (limited) return { error: limited }
   const supabase = await createClient()
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: meta, emailRedirectTo: `${await origin()}/auth/callback?next=/dashboard` },
+    options: { data: meta, captchaToken: captcha(formData), emailRedirectTo: `${await origin()}/auth/callback?next=/dashboard` },
   })
   if (error) return { error: friendlyAuthError(error.message) }
 
@@ -96,9 +120,15 @@ export async function forgotPassword(_: ActionState, formData: FormData): Promis
   if (!isSupabaseConfigured) return NOT_CONFIGURED
   const email = String(formData.get('email') ?? '').trim()
   if (!z.email().safeParse(email).success) return { error: 'Enter a valid email address.' }
+  const limited = await rateLimit([
+    { parts: ['reset-acct', norm(email)], limit: 3, windowSeconds: 3600 },
+    { parts: ['reset-ip', await clientIp()], limit: 20, windowSeconds: 3600 },
+  ])
+  if (limited) return { error: limited }
   const supabase = await createClient()
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${await origin()}/auth/callback?next=/reset-password`,
+    captchaToken: captcha(formData),
   })
   if (error) return { error: friendlyAuthError(error.message) }
   return { ok: true, message: 'If an account exists for that email, a password reset link is on its way.' }
@@ -110,7 +140,12 @@ export async function updatePassword(_: ActionState, formData: FormData): Promis
   const confirm = String(formData.get('confirm') ?? '')
   if (password.length < 8) return { error: 'Password must be at least 8 characters.' }
   if (password !== confirm) return { error: 'Passwords do not match.' }
+  if (password.length > 72) return { error: 'Password must be 72 characters or fewer.' }
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Your reset link has expired. Request a new one.' }
+  const limited = await rateLimit([{ parts: ['pw-update', user.id], limit: 5, windowSeconds: 3600 }])
+  if (limited) return { error: limited }
   const { error } = await supabase.auth.updateUser({ password })
   if (error) return { error: friendlyAuthError(error.message) }
   redirect('/dashboard')
@@ -139,6 +174,8 @@ export async function signInWithGoogle(_: ActionState, formData: FormData): Prom
     return { error: 'Please tick the consent box first.' }
   }
   const next = safeNext(formData.get('next'))
+  const limited = await rateLimit([{ parts: ['google-ip', await clientIp()], limit: 60, windowSeconds: 600 }])
+  if (limited) return { error: limited }
   if (!(await googleEnabled())) {
     return { error: 'Google sign-in is not enabled yet. An admin must turn on the Google provider in Supabase (see the setup guide). You can still use email.' }
   }

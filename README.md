@@ -80,7 +80,7 @@ where id = (select id from auth.users where email = 'you@example.com');
 | `supabase/setup.sql` | Once, on a **new** Supabase project (creates everything) |
 | `supabase/create-admin.sql` | To create or promote an admin account |
 | `supabase/fix-permissions.sql` | Only for databases created before 21 Nov 2026 that show "permission denied" |
-| `supabase/upgrade-staff-tools.sql` → `supabase/upgrade-daily-checkin.sql` | Only for databases created before these features existed (run in this order) |
+| `supabase/upgrade-staff-tools.sql` → `supabase/upgrade-daily-checkin.sql` → `supabase/upgrade-security.sql` | Only for databases created before these features existed (run in this order) |
 
 ## Deployment
 
@@ -91,6 +91,16 @@ Import the repository on [Vercel](https://vercel.com), add the three environment
 
 The app runs in Vercel's Singapore region (`vercel.json`), close to the database.
 
+## Security
+
+- **Row Level Security** on every table. All grading, XP and rewards are computed in the database, so they can't be forged from the browser.
+- **Rate limiting in the database** (it can't be bypassed through the public API) for quest and challenge submissions, labs and feedback. Class join codes lock after 15 wrong guesses per hour.
+- **Login protection**: per-IP and per-account limits on login, sign-up and password reset (sized for shared campus networks), plus optional **Cloudflare Turnstile CAPTCHA** enforced by Supabase.
+- **HTTP hardening**: strict Content Security Policy (only Supabase, Google Sign-In and Turnstile are allowed), HSTS, `frame-ancestors 'none'`, `nosniff`, a restrictive Permissions-Policy, and open-redirect checks on every login redirect.
+- **Privacy (RA 10173)**: consent at sign-up, anonymous student codes in research exports, and an admin-only code–identity key.
+
+Production settings: `RATE_LIMIT_SECRET` (server-only) and `NEXT_PUBLIC_TURNSTILE_SITE_KEY`. See `.env.example`.
+
 ## Scripts
 
 | Command | Description |
@@ -98,5 +108,5 @@ The app runs in Vercel's Singapore region (`vercel.json`), close to the database
 | `npm run dev` | Start the development server |
 | `npm run build` / `npm start` | Production build / serve it |
 | `npm run lint` · `npm run typecheck` | ESLint · TypeScript checks |
-| `npm run db:test` | Run the database test suite (33 checks: grading, anti-cheat, privacy, check-ins) |
+| `npm run db:test` | Run the database test suite (37 checks: grading, anti-cheat, privacy, check-ins, rate limits) |
 | `npm run db:seed` | Regenerate the seed SQL from `supabase/content/curriculum.mjs` |

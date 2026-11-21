@@ -3,6 +3,7 @@ import { RankEmblem } from '@/components/game/rank-emblem'
 import { Logo } from '@/components/logo'
 import { Alert } from '@/components/ui/misc'
 import { isSupabaseConfigured } from '@/lib/env'
+import { CaptchaProvider } from './captcha'
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -37,7 +38,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <strong>Setup needed:</strong> Supabase environment variables are missing, so sign-in is disabled. See the README’s deployment guide.
             </Alert>
           )}
-          <div className="card chamfer border-line-bright p-6 sm:p-8">{children}</div>
+          <CaptchaProvider>
+            <div className="card chamfer border-line-bright p-6 sm:p-8">{children}</div>
+          </CaptchaProvider>
         </div>
       </main>
     </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { GoogleButton, OrDivider, RegisterForm } from '../forms'
+import { CaptchaWidget } from '../captcha'
 
 export const metadata: Metadata = { title: 'Create account' }
 
@@ -13,6 +14,7 @@ export default function RegisterPage() {
       <GoogleButton intent="register" />
       <OrDivider />
       <RegisterForm />
+      <CaptchaWidget />
       <p className="mt-6 text-center text-sm text-slate-600">
         Already have an account? <Link href="/login" className="font-semibold text-indigo-700 hover:underline">Log in</Link>
       </p>

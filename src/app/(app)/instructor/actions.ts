@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { requireAdmin, requireStaff } from '@/lib/auth'
 import { questIssues, questionIssues, toDb } from '@/lib/forge'
+import { rateLimit } from '@/lib/rate-limit'
 import type { ActionState } from '@/lib/types'
 import { errorMessage } from '@/lib/utils'
 
@@ -109,6 +110,8 @@ export type ForgeSaveResult = { ok: true; questId: string; ids: Record<string, s
 
 export async function saveQuestBundle(input: unknown): Promise<ForgeSaveResult> {
   const { supabase, profile } = await requireStaff()
+  const limited = await rateLimit([{ parts: ['forge-save', profile.id], limit: 60, windowSeconds: 600 }])
+  if (limited) return { ok: false, error: limited }
   const parsed = forgeBundle.safeParse(input)
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid quest data.' }
   const { quest, questions } = parsed.data

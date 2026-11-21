@@ -122,9 +122,12 @@ export async function joinClass(_: ActionState, formData: FormData): Promise<Act
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('join_class', { p_code: code })
   if (error) return { error: errorMessage(error) }
+  // Wrong codes come back as { error } (not an exception) so the database can count guesses.
+  const result = data as { name?: string; error?: string }
+  if (result?.error) return { error: result.error }
   revalidatePath('/profile')
   revalidatePath('/leaderboard')
-  return { ok: true, message: `You joined ${(data as { name: string }).name}!` }
+  return { ok: true, message: `You joined ${result.name}!` }
 }
 
 export async function leaveClass(classId: string) {
